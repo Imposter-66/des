@@ -5,7 +5,10 @@
  *  ・Vercel の Node 関数としても、`node server.js` のローカル起動としても動きます。
  *  ・状態の保存は Upstash Redis（Vercel の Storage から追加）。
  *    ローカルで環境変数が無い場合だけ「メモリ保存」で動きます（再起動で消えます）。
- *  ・判定・ダメージ計算・コイン付与・パスワードのハッシュ化は、すべてこのサーバーで行います。
+ *  ・ログインは「GAKU acct」（学校のスプレッドシートのアカウント）だけを使います。
+ *    ブラウザに届いた「確認コード」を、このサーバーが GAKU acct のサーバーに送って本人確認します。
+ *    （パスワードはこのゲームには一切届きません。保存もしません。）
+ *  ・判定・ダメージ計算・コイン付与は、すべてこのサーバーで行います。
  *    ブラウザ(index.html)は「入力を送る」「結果を表示する」だけです。
  *
  *  目次
@@ -13,7 +16,7 @@
  *   2. 問題データ (QuestionRepo)
  *   3. データベース層 (Upstash / メモリ)
  *   4. 共通ユーティリティ (エラー・ロック・レート制限)
- *   5. 認証 (scrypt + 署名付きCookie)
+ *   5. 認証 (GAKU acct の確認コード + 署名付きCookie)
  *   6. ルーム管理 / ゲームエンジン
  *   7. ショップ
  *   8. ルーティングと HTTP ハンドラ
@@ -23,8 +26,6 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { promisify } = require('util');
-const scrypt = promisify(crypto.scrypt);
 
 /* ============================================================
  * 1. 設定 / スキル・スキン定義
@@ -65,6 +66,17 @@ const SKINS = [
   { id: 'neptune', name: '海王星', cost: 500, color: '#1e3a8a' },
 ];
 const skillCost = (lv) => 50 + lv * 50;
+
+/* GAKU acct（確認コードの照合先）
+ * 環境変数 GAKU_ACCT_URL（ウェブアプリの /exec のURL）があればそれを使います。
+ * 無ければ、下の2つを順番に試します。 */
+const GAKU_ID = 'AKfycbyDnabgy3qc0L6Y4cfwW53tyzPMPS2thg1nd6mAvtIHa5YURK3Tui4c7vCUWt47sCow';
+const GAKU_VERIFY_URLS = process.env.GAKU_ACCT_URL
+  ? [String(process.env.GAKU_ACCT_URL).trim().replace(/[?#].*$/, '')]
+  : [
+    `https://script.google.com/macros/s/${GAKU_ID}/exec`,
+    `https://script.google.com/a/macros/school.kasugai.ed.jp/s/${GAKU_ID}/exec`,
+  ];
 
 /* ============================================================
  * 2. 問題データ
@@ -411,30 +423,11 @@ async function requireUser(ctx) {
   return ctx.user;
 }
 
-async function hashPassword(pw) {
-  const salt = crypto.randomBytes(16);
-  const hash = await scrypt(pw, salt, 64);
-  return `s1$${salt.toString('hex')}$${hash.toString('hex')}`;
-}
-async function verifyPassword(pw, stored) {
-  const [v, s, h] = String(stored || '').split('$');
-  if (v !== 's1' || !s || !h) return false;
-  const calc = await scrypt(pw, Buffer.from(s, 'hex'), 64);
-  const exp = Buffer.from(h, 'hex');
-  return exp.length === calc.length && crypto.timingSafeEqual(calc, exp);
-}
-let dummyHash = null; // ユーザーが存在しない時も同じ時間をかけて、存在確認をされないようにする
+/** プレイヤーを見分けるための短い公開ID（クラス・出席番号は画面に出さない） */
+const uid = (key) => crypto.createHash('sha256').update(String(key)).digest('hex').slice(0, 12);
 
-const USERNAME_RE = /^[\p{L}\p{N}_\-]{2,16}$/u;
-function normalizeUsername(raw) {
-  if (typeof raw !== 'string') throw new HttpError(400, 'ユーザー名を入力してください。', 'bad_username');
-  const name = raw.normalize('NFKC').trim();
-  if (!USERNAME_RE.test(name)) throw new HttpError(400, 'ユーザー名は2〜16文字の、文字・数字・_ - だけが使えます。', 'bad_username');
-  return { name, key: name.toLowerCase() };
-}
-
-const defaultUserDoc = (name, pw) => ({
-  username: name, pw, createdAt: Date.now(),
+const defaultUserDoc = (name, cls, no) => ({
+  username: name, cls, no, createdAt: Date.now(),
   skills: { attack: 0, hp: 0, evade: 0, heal: 0, critical: 0 },
   equipped: [], skins: ['earth'], skin: 'earth',
 });
@@ -444,7 +437,10 @@ const setUser = (key, doc) => db.cmd(['SET', K.user(key), JSON.stringify(doc)]);
 async function buildMe(key, doc) {
   const [coinRaw, roomId] = await Promise.all([db.cmd(['GET', K.coin(key)]), currentRoomOf(key)]);
   return {
-    user: { username: doc.username, coins: Number(coinRaw || 0), skills: doc.skills, equipped: doc.equipped, unlockedSkins: doc.skins, skin: doc.skin },
+    user: {
+      id: uid(key), username: doc.username, cls: doc.cls, no: doc.no,
+      coins: Number(coinRaw || 0), skills: doc.skills, equipped: doc.equipped, unlockedSkins: doc.skins, skin: doc.skin,
+    },
     roomId,
   };
 }
@@ -455,33 +451,57 @@ async function issueSession(ctx, doc, key) {
   setSessionCookie(ctx, token, maxAge);
 }
 
-async function register(ctx) {
-  const { name, key } = normalizeUsername(ctx.body.username);
-  const pw = ctx.body.password;
-  if (typeof pw !== 'string' || pw.length < 8 || pw.length > 72) throw new HttpError(400, 'パスワードは8〜72文字にしてください。', 'bad_password');
-  await rateLimit(`reg:${ctx.ip}`, 30, 3600, 'このネットワークからの登録が多すぎます。しばらくしてからお試しください。');
-  const doc = defaultUserDoc(name, await hashPassword(pw));
-  const ok = await db.cmd(['SET', K.user(key), JSON.stringify(doc), 'NX']); // 同時登録でも1人だけ成功
-  if (ok !== 'OK') throw new HttpError(409, 'そのユーザー名はすでに使われています。', 'exists');
-  await db.cmd(['SET', K.coin(key), '0', 'NX']);
-  await issueSession(ctx, doc, key);
-  return buildMe(key, doc);
+/** GAKU acct のサーバーに確認コードを送り、本人の情報を受け取る（コードは5分・1回だけ有効） */
+async function verifyGakuCode(code) {
+  let lastErr = null;
+  for (const base of GAKU_VERIFY_URLS) {
+    let res;
+    try {
+      res = await fetch(`${base}?verify=${code}`, { redirect: 'follow', signal: AbortSignal.timeout(9000) });
+    } catch (e) { lastErr = e; continue; }
+    const text = await res.text().catch(() => '');
+    let j = null;
+    try { j = JSON.parse(text); } catch { /* HTMLが返ってきた = 公開設定が「全員」になっていない等 */ }
+    if (j && typeof j === 'object' && typeof j.ok === 'boolean') return j;
+    lastErr = new Error(`non-JSON response from GAKU acct (HTTP ${res.status})`);
+  }
+  console.error('[gaku verify]', lastErr && lastErr.message);
+  throw new HttpError(502, 'GAKU acct と通信できませんでした。しばらくしてからもう一度お試しください。（改善しない場合は、管理者にウェブアプリの公開設定を確認してもらってください）', 'gaku_unreachable');
 }
 
-async function login(ctx) {
-  const { key } = normalizeUsername(ctx.body.username);
-  const pw = ctx.body.password;
-  if (typeof pw !== 'string' || !pw || pw.length > 200) throw new HttpError(400, 'パスワードを入力してください。', 'bad_password');
-  await rateLimit(`login:${ctx.ip}`, 60, 300);
-  const failKey = `rl:lf:${key}`;
-  if (Number((await db.cmd(['GET', failKey])) || 0) >= 8) throw new HttpError(429, 'ログインに失敗しすぎました。5分ほど待ってください。', 'rate_limited');
-  const doc = await getUser(key);
-  let ok = false;
-  if (doc) ok = await verifyPassword(pw, doc.pw);
-  else { dummyHash = dummyHash || (await hashPassword('dummy-password')); await verifyPassword(pw, dummyHash); }
-  if (!ok) {
-    await db.pipe([['INCR', failKey], ['EXPIRE', failKey, 300, 'NX']]);
-    throw new HttpError(401, 'ユーザー名またはパスワードが違います。', 'bad_credentials');
+/** ログイン：ブラウザの GAKU acct 画面から届いた「確認コード」を照合して、ゲームのセッションを作る */
+async function gakuLogin(ctx) {
+  const code = ctx.body.code;
+  if (typeof code !== 'string' || !/^[0-9a-f]{64}$/.test(code)) throw new HttpError(400, '確認コードが正しくありません。GAKU acct でログインし直してください。', 'bad_code');
+  await rateLimit(`gaku:${ctx.ip}`, 60, 300, 'ログインの試行が多すぎます。少し待ってからお試しください。');
+
+  const v = await verifyGakuCode(code);
+  if (!v.ok) throw new HttpError(401, v.message || '確認コードが正しくありません。GAKU acct でログインし直してください。', 'bad_code');
+  if (v.active === false) throw new HttpError(403, 'このアカウントは現在停止中です。', 'inactive');
+
+  const cls = String(v.cls || '').normalize('NFKC').trim();
+  const no = Number(v.no);
+  const name = String(v.name || '').replace(/[\u0000-\u001f\u007f<>]/g, '').trim().slice(0, 20);
+  if (!cls || cls.length > 30 || !Number.isInteger(no) || no < 1 || no > 9999 || !name) {
+    throw new HttpError(502, 'アカウント情報を読み取れませんでした。', 'bad_account');
+  }
+  const key = `g:${cls}:${no}`;                      // クラス＋出席番号が、このゲームでのユーザーID
+
+  const fresh = defaultUserDoc(name, cls, no);
+  const created = await db.cmd(['SET', K.user(key), JSON.stringify(fresh), 'NX']);   // 初回だけ作る
+  let doc = fresh;
+  if (created === 'OK') {
+    await db.cmd(['SET', K.coin(key), '0', 'NX']);
+  } else {
+    doc = await getUser(key);
+    if (doc && (doc.username !== name || doc.cls !== cls || doc.no !== no)) {          // 名前が変わっていたら更新
+      await withLock(`user:${key}`, 8000, async () => {
+        const d2 = await getUser(key);
+        d2.username = name; d2.cls = cls; d2.no = no;
+        await setUser(key, d2); doc = d2;
+      }, { retries: 20 });
+    }
+    if (!doc) throw new HttpError(500, 'アカウントの読み込みに失敗しました。', 'server_error');
   }
   await issueSession(ctx, doc, key);
   return buildMe(key, doc);
@@ -548,7 +568,7 @@ async function currentRoomOf(key, opts = {}) {
   return rid;
 }
 
-function makePlayer(doc, mode) {
+function makePlayer(doc, mode, key) {
   const eq = {};
   let mx = 100;
   if (mode === 'normal') {
@@ -558,7 +578,7 @@ function makePlayer(doc, mode) {
       if (id === 'hp') mx += lv * 10; else eq[id] = lv;
     }
   }
-  return { n: doc.username, hp: mx, mx, sn: doc.skin || 'earth', d: 0, rk: null, eq };
+  return { u: uid(key), n: doc.username, hp: mx, mx, sn: doc.skin || 'earth', d: 0, rk: null, eq };
 }
 
 async function createRoom(ctx) {
@@ -588,7 +608,7 @@ async function createRoom(ctx) {
   };
   await db.pipe([
     ['SET', K.room(id), JSON.stringify(room), 'EX', CONFIG.ROOM_TTL_PLAY],
-    ['HSET', K.pl(id), u.key, JSON.stringify(makePlayer(doc, mode))],
+    ['HSET', K.pl(id), u.key, JSON.stringify(makePlayer(doc, mode, u.key))],
     ['EXPIRE', K.pl(id), CONFIG.ROOM_TTL_PLAY],
     ['SET', K.ver(id), '1', 'EX', CONFIG.ROOM_TTL_PLAY],
     ['SADD', 'rooms', id],
@@ -638,7 +658,7 @@ async function joinRoom(ctx) {
   const doc = await getUser(u.key);
   if (!doc) throw new HttpError(401, 'アカウントが見つかりません。', 'unauthorized');
 
-  const added = await db.cmd(['HSETNX', K.pl(id), u.key, JSON.stringify(makePlayer(doc, room.mode))]);
+  const added = await db.cmd(['HSETNX', K.pl(id), u.key, JSON.stringify(makePlayer(doc, room.mode, u.key))]);
   if (Number(added) === 1) {
     const [n, fresh] = await db.pipe([['HLEN', K.pl(id)], ['GET', K.room(id)]]);
     const r2 = parseJSON(fresh);
@@ -808,7 +828,7 @@ async function resolveRound(room) {
   const aliveAfter = aliveKeys.length - dead.length;
   for (const k of dead) players[k].rk = Math.max(1, aliveAfter + 1);   // 同時に脱落した人は同順位
   room.alive = aliveAfter;
-  room.last = { qNo: room.qNo, correctIndex: correctIdx, top: top ? players[top].n : null, topAtk, crit };
+  room.last = { qNo: room.qNo, correctIndex: correctIdx, top: top ? players[top].n : null, topId: top ? players[top].u : null, topAtk, crit };
 
   const finished = aliveAfter <= 1 || room.qNo >= CONFIG.MAX_QUESTIONS;
   if (finished) {
@@ -906,7 +926,7 @@ async function roomState(ctx) {
   const map = pairsToMap(plFlat, JSON.parse);
   const meP = map[u.key];
   if (!meP) throw new HttpError(403, 'このルームの参加者ではありません。', 'not_member');
-  const players = Object.values(map).map((p) => ({ n: p.n, h: p.hp, m: p.mx, s: p.sn, d: p.d, r: p.rk }));
+  const players = Object.values(map).map((p) => ({ u: p.u, n: p.n, h: p.hp, m: p.mx, s: p.sn, d: p.d, r: p.rk }));
   const publicRoom = {
     id: room.id, status: room.status, phase: room.phase, mode: room.mode, maxPlayers: room.maxPlayers,
     isPrivate: room.isPrivate, host: room.host, isHost: room.hostKey === u.key,
@@ -918,7 +938,7 @@ async function roomState(ctx) {
   const myAnswer = ansRaw ? JSON.parse(ansRaw).i : null;
   return {
     changed: true, now: Date.now(), ver: Number(ver || 0), room: publicRoom, players,
-    me: { n: meP.n, h: meP.hp, m: meP.mx, s: meP.sn, d: meP.d, r: meP.rk },
+    me: { u: meP.u, n: meP.n, h: meP.hp, m: meP.mx, s: meP.sn, d: meP.d, r: meP.rk },
     myResult: room.phase === 'question' ? null : parseJSON(resRaw),
     myReward: room.status === 'finished' && rwRaw != null ? Number(rwRaw) : null,
     myAnswer,
@@ -990,8 +1010,7 @@ const ROUTES = [
       questionMs: CONFIG.QUESTION_MS, maxQuestions: CONFIG.MAX_QUESTIONS,
     } };
   }],
-  ['POST', /^\/api\/auth\/register$/, register],
-  ['POST', /^\/api\/auth\/login$/, login],
+  ['POST', /^\/api\/auth\/gaku$/, gakuLogin],
   ['POST', /^\/api\/auth\/logout$/, logout],
   ['GET',  /^\/api\/me$/, me],
   ['GET',  /^\/api\/rooms$/, listRooms],
