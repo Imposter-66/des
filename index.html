@@ -501,7 +501,11 @@
 
     function renderView() {
         const v = !state.authReady ? 'none' : !state.user ? 'welcome' : state.roomId ? 'game' : 'lobby';
-        for (const name of ['welcome', 'lobby', 'game']) $('view-' + name).classList.toggle('hidden', name !== v);
+        for (const name of ['welcome', 'lobby', 'game']) {
+            const el = $('view-' + name);
+            el.classList.toggle('hidden', name !== v);
+            el.classList.toggle('flex', name === v);   // 表示中だけ flex（中央寄せ・縦並びに必要）
+        }
         if (v === 'lobby') renderLobby();
         if (v === 'game') renderGame();
     }
@@ -615,7 +619,6 @@
 
     function renderGame() {
         const g = state.game;
-        $('view-game').classList.toggle('flex', !$('view-game').classList.contains('hidden'));
         if (!g) {
             setText('game-status-text', '読み込み中...');
             return;
