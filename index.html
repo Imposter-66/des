@@ -121,18 +121,14 @@
                         <i class="ph ph-sign-out text-base"></i>
                     </button>
                 </div>
-                <button id="login-btn" data-action="open-auth" data-tab="login" class="flex items-center gap-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-500 px-4 py-1.5 rounded-full transition-colors shadow-lg shadow-blue-600/20">
-                    <i class="ph ph-sign-in text-lg"></i>
-                    <span>ログイン</span>
-                </button>
             </div>
         </div>
     </header>
 
     <main class="flex-grow max-w-6xl mx-auto w-full px-4 py-8 relative">
 
-        <!-- ようこそ画面 -->
-        <div id="view-welcome" class="hidden flex-col items-center justify-center py-16 text-center space-y-6">
+        <!-- ようこそ画面（GAKU acct でログイン） -->
+        <div id="view-welcome" class="hidden flex-col items-center justify-center py-10 text-center space-y-6">
             <div class="earth w-32 h-32 md:w-48 md:h-48 mb-4"></div>
             <h2 class="text-3xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-400">
                 理科の知識で、地球を破壊せよ。
@@ -140,9 +136,16 @@
             <p class="text-slate-300 text-lg max-w-xl">
                 オンライン多人数対戦型クイズゲーム！問題にいち早く正解して、ライバルたちの星をまとめて破壊しよう。最大1000人対戦対応！
             </p>
-            <button data-action="open-auth" data-tab="login" class="mt-8 px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-2xl shadow-xl shadow-blue-900/50 hover:scale-105 transition-transform text-lg flex items-center gap-2">
+
+            <!-- ① GAKU acct（アカウント情報）。ここでクラス・出席番号・パスワードを入れてログインします -->
+            <div class="glass-panel rounded-2xl p-3 w-full max-w-[460px]">
+                <div class="text-sm font-bold text-blue-200 mb-2 flex items-center justify-center gap-1"><i class="ph-fill ph-identification-card"></i> GAKU acct でログイン</div>
+                <iframe id="gaku-frame" src="https://script.google.com/a/macros/school.kasugai.ed.jp/s/AKfycbyDnabgy3qc0L6Y4cfwW53tyzPMPS2thg1nd6mAvtIHa5YURK3Tui4c7vCUWt47sCow/exec?embed=1" width="420" height="520" style="border:0;border-radius:12px;max-width:100%" allow="clipboard-write" title="GAKU acct"></iframe>
+            </div>
+            <p class="text-slate-400 text-sm max-w-md">上の枠でログインすると、自動でゲームが始められます。<br>うまく進まないときは、下のボタンを押してください。</p>
+            <button data-action="gaku-start" class="px-8 py-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white font-bold rounded-2xl shadow-xl shadow-blue-900/50 hover:scale-105 transition-transform text-lg flex items-center gap-2">
                 <i class="ph-fill ph-rocket-launch text-2xl"></i>
-                ゲームを始める (ログイン/登録)
+                ゲームを始める
             </button>
         </div>
 
@@ -270,49 +273,6 @@
         </div>
     </div>
 
-    <!-- ログイン/登録 -->
-    <div id="auth-modal" data-on="0" class="fixed inset-0 bg-slate-900/60 modal-overlay z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-300">
-        <div class="bg-slate-800 border border-slate-600 rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden transform scale-95 transition-transform duration-300 text-slate-200">
-            <div class="px-6 py-4 border-b border-slate-700 flex justify-between items-center bg-slate-800/50">
-                <div class="flex gap-4">
-                    <button id="auth-tab-login" data-action="auth-tab" data-tab="login" class="font-bold text-lg pb-1 border-b-2 transition-all">ログイン</button>
-                    <button id="auth-tab-register" data-action="auth-tab" data-tab="register" class="font-bold text-lg pb-1 border-b-2 transition-all">アカウント作成</button>
-                </div>
-                <button data-action="close-modal" class="text-slate-400 hover:text-white focus:outline-none"><i class="ph ph-x text-xl"></i></button>
-            </div>
-            <form id="auth-form-login" data-form="login" class="p-6" autocomplete="on">
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-slate-300 mb-1">ユーザー名</label>
-                    <input type="text" name="username" autocomplete="username" maxlength="16" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none text-sm text-white">
-                </div>
-                <div class="mb-6">
-                    <label class="block text-sm font-medium text-slate-300 mb-1">パスワード</label>
-                    <input type="password" name="password" autocomplete="current-password" maxlength="72" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none text-sm text-white">
-                </div>
-                <button type="submit" class="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white font-bold rounded-lg shadow-lg transition-colors flex justify-center items-center gap-2">
-                    <i class="ph ph-sign-in"></i> ログイン
-                </button>
-            </form>
-            <form id="auth-form-register" data-form="register" class="p-6 hidden" autocomplete="on">
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-slate-300 mb-1">ユーザー名 (2〜16文字)</label>
-                    <input type="text" name="username" autocomplete="username" maxlength="16" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none text-sm text-white">
-                </div>
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-slate-300 mb-1">パスワード (8文字以上)</label>
-                    <input type="password" name="password" autocomplete="new-password" maxlength="72" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none text-sm text-white">
-                </div>
-                <div class="mb-6">
-                    <label class="block text-sm font-medium text-slate-300 mb-1">パスワード (確認)</label>
-                    <input type="password" name="confirm" autocomplete="new-password" maxlength="72" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none text-sm text-white">
-                </div>
-                <button type="submit" class="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white font-bold rounded-lg shadow-lg transition-colors flex justify-center items-center gap-2">
-                    <i class="ph ph-user-plus"></i> アカウント作成
-                </button>
-            </form>
-        </div>
-    </div>
-
     <!-- ルーム作成 -->
     <div id="create-modal" data-on="0" class="fixed inset-0 bg-slate-900/60 modal-overlay z-[55] flex items-center justify-center hidden opacity-0 transition-opacity duration-300">
         <form id="create-form" data-form="create" class="bg-slate-800 border border-slate-600 rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 transform scale-95 transition-transform duration-300 text-slate-200 max-h-[92vh] overflow-y-auto">
@@ -398,13 +358,89 @@
         </div>
     </div>
 
+    <!-- ② GAKU acct の機能呼び出し（見た目なし）。①の枠と同じページに置く必要があります -->
+    <script>
+var GakuAcct = (function () {
+  var win = null, n = 0, wait = {}, hooks = [], me = null, proof = '';
+  // 「この埋め込み画面から届いた信号か」を調べる（ほかのサイトからの偽の信号は無視する）
+  // GAS のページは外の枠の中にもう一つ枠がある二重の作りなので、枠の中の窓まで調べる
+  function inTree(w, src, depth) {
+    if (depth > 3) return false;
+    var n = 0; try { n = w.frames.length; } catch (x) {}
+    for (var i = 0; i < n; i++) {
+      var c = null; try { c = w.frames[i]; } catch (x) {}
+      if (c && (c === src || inTree(c, src, depth + 1))) return true;
+    }
+    return false;
+  }
+  function mine(src) {
+    var fs = document.querySelectorAll('iframe');
+    for (var i = 0; i < fs.length; i++) {
+      var w = fs[i].contentWindow;
+      if (w && (w === src || inTree(w, src, 0))) return true;
+    }
+    return false;
+  }
+  function fire(d) { hooks.forEach(function (f) { try { f(d); } catch (x) { console.error(x); } }); }
+  window.addEventListener('message', function (e) {
+    var d = e.data;
+    if (!d || typeof d !== 'object' || !mine(e.source)) return;
+    if (d.type === 'gakuacct') {
+      win = e.source;
+      if (d.event === 'login') { me = d; proof = ''; }
+      else if (d.event === 'update' && me) { for (var k in d) { if (k !== 'type' && k !== 'event') me[k] = d[k]; } }
+      else if (d.event === 'proof') { proof = d.code || ''; if (me) me.code = proof; }
+      else if (d.event === 'logout') { me = null; proof = ''; }
+      fire(d);
+    } else if (d.type === 'gakuacct-result' && wait[d.id]) { wait[d.id](d.result); delete wait[d.id]; }
+  });
+  // 読み込まれたあとに、いまの状態（ログイン中か）を、埋め込み画面に聞く（信号を取りこぼさないため）
+  function each(w, depth) {
+    if (!w || depth > 3) return;
+    try { w.postMessage({ type: 'gakuacct-hello' }, '*'); } catch (x) {}
+    var n = 0; try { n = w.frames.length; } catch (x) {}
+    for (var i = 0; i < n; i++) { try { each(w.frames[i], depth + 1); } catch (x) {} }
+  }
+  function hello() {
+    var fs = document.querySelectorAll('iframe');
+    for (var i = 0; i < fs.length; i++) { each(fs[i].contentWindow, 0); }
+  }
+  [800, 2500, 6000].forEach(function (t) { setTimeout(function () { if (!win) hello(); }, t); });
+  window.addEventListener('load', hello);
+  return {
+    // すべての信号を受け取る。d.event：ready / login / proof / update / logout
+    on: function (f) { hooks.push(f); },
+    // ログインした瞬間に呼ばれる（すでにログイン中なら、すぐに呼ばれる）。d.via：'password'（パスワード）/ 'saved'（保存された情報）/ 'resume'
+    onLogin: function (f) {
+      hooks.push(function (d) { if (d.event === 'login') f(d); });
+      if (me) f(me);
+    },
+    // ログアウトしたときに呼ばれる
+    onLogout: function (f) { hooks.push(function (d) { if (d.event === 'logout') f(d); }); },
+    // いまログインしている人の情報（いなければ null）
+    user: function () { return me; },
+    // 本人確認用の確認コード（届いていなければ ''）
+    code: function () { return proof; },
+    // 機能を、見た目なしで呼び出す
+    call: function (fn, args) {
+      return new Promise(function (ok) {
+        if (!win) { ok({ ok: false, code: 'wait', message: 'GAKU acct がまだ読み込まれていません。' }); return; }
+        var id = ++n, t = setTimeout(function () { delete wait[id]; ok({ ok: false, code: 'timeout', message: '時間切れです。' }); }, 90000);
+        wait[id] = function (r) { clearTimeout(t); ok(r); };
+        win.postMessage({ type: 'gakuacct-call', id: id, fn: fn, args: args || [] }, '*');
+      });
+    }
+  };
+})();
+    </script>
+
     <script>
     'use strict';
     /* =====================================================================
      * 地球破壊オンライン - フロントエンド
      *
      *  設計ルール
-     *   1. 判定・計算・コイン・パスワードは一切ここでやらない（すべて server.js）。
+     *   1. 判定・計算・コインは一切ここでやらない（すべて server.js）。ログインは GAKU acct（パスワードはここに届かない）。
      *   2. 状態は `state` に集約。変更は setState() だけ。画面は render() が state から描く。
      *   3. ユーザー入力由来の文字は必ず textContent で表示（innerHTML に埋め込まない = XSS対策）。
      *   4. クリックは data-action 属性＋イベント委譲でまとめて処理（onclick の直書きなし）。
@@ -452,8 +488,7 @@
         ver: 0,
         clockOffset: 0,      // サーバー時刻 - 自分の時刻
         picked: null,        // {qNo, idx}  自分が選んだ答え
-        modal: null,         // 'auth' | 'create' | 'join' | 'shop' | null
-        authTab: 'login',
+        modal: null,         // 'create' | 'join' | 'shop' | null
         shopTab: 'skill',
         alert: null,         // {title, message}
         pendingJoin: null,
@@ -495,7 +530,6 @@
     function renderHeader() {
         const u = state.user;
         $('user-info').classList.toggle('hidden', !u);
-        $('login-btn').classList.toggle('hidden', !!u);
         if (u) { setText('user-display-name', u.username); setText('user-coins', u.coins); }
     }
 
@@ -634,7 +668,7 @@
             $('game-status-text').replaceChildren(icon('ph-fill ph-users text-blue-400'), ' 参加者待機中');
             setText('waiting-count-text', `現在の参加人数: ${g.players.length} / ${r.maxPlayers}`);
             const shown = g.players.slice(0, 60);
-            const badges = shown.map((p) => h('span', { class: `bg-slate-700 px-3 py-1.5 rounded-full text-sm font-bold flex items-center gap-1 ${p.n === me.n ? 'border border-blue-400' : ''}` },
+            const badges = shown.map((p) => h('span', { class: `bg-slate-700 px-3 py-1.5 rounded-full text-sm font-bold flex items-center gap-1 ${p.u === me.u ? 'border border-blue-400' : ''}` },
                 icon(`ph-fill ph-user-circle ${p.n === r.host ? 'text-yellow-400' : 'text-slate-400'}`), h('span', { text: p.n })));
             if (g.players.length > shown.length) badges.push(h('span', { class: 'text-slate-400 text-sm self-center', text: `ほか ${g.players.length - shown.length} 人` }));
             $('waiting-players-list').replaceChildren(...badges);
@@ -681,7 +715,7 @@
         $('opp-filter-all').className = 'px-2 py-1 ' + (state.oppFilter === 'all' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400');
         setText('survivor-status-text', `生存: ${r.alive} / ${r.total} 人`);
         if (!oppList) oppList = new VirtualList($('opponents-list'), 44, makeOppRow, fillOppRow);
-        const others = g.players.filter((p) => p.n !== me.n && (state.oppFilter === 'all' || !p.d));
+        const others = g.players.filter((p) => p.u !== me.u && (state.oppFilter === 'all' || !p.d));
         others.sort((a, b) => (a.d - b.d) || (a.h - b.h) || (a.n < b.n ? -1 : 1));
         oppList.setItems(others);
 
@@ -739,7 +773,7 @@
             const lines = [h('div', { class: 'text-xs font-bold opacity-80 mb-1', text: `正解: ${correctText}` })];
             if (!res) { lines.push(h('div', { class: 'font-bold', text: me.d ? '観戦中です。' : '結果を集計しています...' })); style = 'bg-slate-800 text-slate-300 border-slate-600'; }
             else if (res.c) {
-                if (last.top === me.n) { lines.push(h('div', { class: 'font-bold', text: '一番乗り！他プレイヤーを攻撃！' })); style = 'bg-yellow-900/50 text-yellow-400 border-yellow-700'; }
+                if (last.topId === me.u) { lines.push(h('div', { class: 'font-bold', text: '一番乗り！他プレイヤーを攻撃！' })); style = 'bg-yellow-900/50 text-yellow-400 border-yellow-700'; }
                 else { lines.push(h('div', { class: 'font-bold', text: '正解！攻撃を回避！' })); style = 'bg-green-900/50 text-green-400 border-green-700'; }
                 if (res.h) lines.push(h('div', { class: 'text-sm opacity-80', text: `HPが ${res.h} 回復` }));
             } else {
@@ -799,19 +833,11 @@
 
     let shopSig = '';
     function renderModals() {
-        setModal($('auth-modal'), state.modal === 'auth');
         setModal($('create-modal'), state.modal === 'create');
         setModal($('join-modal'), state.modal === 'join');
         setModal($('shop-modal'), state.modal === 'shop');
         setModal($('alert-modal'), !!state.alert);
         if (state.alert) { setText('alert-title', state.alert.title); setText('alert-message', state.alert.message); }
-
-        const act = 'font-bold text-lg pb-1 border-b-2 transition-all text-blue-400 border-blue-400';
-        const inact = 'font-bold text-lg pb-1 border-b-2 transition-all text-slate-400 hover:text-slate-200 border-transparent';
-        $('auth-tab-login').className = state.authTab === 'login' ? act : inact;
-        $('auth-tab-register').className = state.authTab === 'register' ? act : inact;
-        $('auth-form-login').classList.toggle('hidden', state.authTab !== 'login');
-        $('auth-form-register').classList.toggle('hidden', state.authTab !== 'register');
 
         if (state.modal === 'shop' && state.user && state.meta) {
             const sig = JSON.stringify([state.user, state.shopTab]);
@@ -868,8 +894,47 @@
     function sessionExpired() {
         loopGen++;
         setState({ user: null, roomId: null, game: null, modal: null });
-        showAlert('ログイン切れ', 'もう一度ログインしてください。');
+        showAlert('ログイン切れ', '「ゲームを始める」ボタンを押して、もう一度ログインしてください。');
     }
+
+    /* ---------------- GAKU acct ログイン ---------------- */
+    // GAKU acct の枠から届いた「確認コード」をサーバーに送り、本人確認ができたらゲームのログイン完了
+    let exchanging = false;
+    async function exchangeCode(code) {
+        if (exchanging) return;
+        exchanging = true;
+        try {
+            const r = await api('POST', '/api/auth/gaku', { code });
+            if (state.user && state.user.id === r.user.id) {      // すでに同じ人でログイン中
+                setState({ user: r.user });
+                if (r.roomId && !state.roomId) enterRoom(r.roomId);
+            } else onLoggedIn(r);
+        } catch (e) {
+            showAlert('ログインできません', e.message);
+        } finally { exchanging = false; }
+    }
+    // GAKU acct の枠に「いまの確認コードをください」と頼む（ログイン済みなら届く）
+    async function requestProof() {
+        const r = await GakuAcct.call('proof');
+        if (r && r.ok && r.code) return exchangeCode(r.code);
+        if (r && r.code === 'wait') return showAlert('読み込み中です', 'GAKU acct の枠がまだ読み込まれていません。少し待ってから、もう一度押してください。');
+        showAlert('ログインしてください', '上の GAKU acct の枠で、クラス・出席番号・パスワードを入れてログインしてください。');
+    }
+    async function doLogout(alsoGakuAcct) {
+        loopGen++;
+        if (alsoGakuAcct) { try { await Promise.race([GakuAcct.call('logout'), sleep(3000)]); } catch (e) { /* 無視 */ } }
+        try { await api('POST', '/api/auth/logout'); } catch (e) { /* 無視 */ }
+        setState({ user: null, roomId: null, game: null, modal: null, rooms: [] });
+    }
+    GakuAcct.on((d) => {
+        if (d.event === 'proof' && d.code) {
+            const u = state.user;
+            if (u && u.cls === d.cls && Number(u.no) === Number(d.no)) return;   // 同じ人でログイン済みなら何もしない
+            exchangeCode(d.code);                                              // 別の人・未ログインなら、確認コードで入り直す
+        } else if (d.event === 'logout') {
+            if (state.user) doLogout(false);                                   // GAKU acct 側でログアウトしたら、ゲームもログアウト
+        }
+    });
     async function busy(btn, fn) {
         if (btn) btn.disabled = true;
         try { return await fn(); } finally { if (btn) btn.disabled = false; }
@@ -955,8 +1020,7 @@
 
     /* ---------------- アクション（data-action） ---------------- */
     const actions = {
-        'open-auth': (el) => setState({ modal: 'auth', authTab: el.dataset.tab || 'login' }),
-        'auth-tab': (el) => setState({ authTab: el.dataset.tab }),
+        'gaku-start': (el) => busy(el, () => requestProof()),
         'close-modal': () => setState({ modal: null }),
         'close-alert': () => setState({ alert: null }),
         'opp-filter': (el) => setState({ oppFilter: el.dataset.value }),
@@ -964,11 +1028,7 @@
         'shop-tab': (el) => setState({ shopTab: el.dataset.tab }),
         'open-create': () => setState({ modal: 'create' }),
 
-        async logout() {
-            loopGen++;
-            try { await api('POST', '/api/auth/logout'); } catch (e) { /* 無視 */ }
-            setState({ user: null, roomId: null, game: null, modal: null, rooms: [] });
-        },
+        'logout': () => doLogout(true),
 
         async 'join-room'(el) {
             const room = state.rooms.find((r) => r.id === el.dataset.id);
@@ -1033,23 +1093,6 @@
     }
 
     const forms = {
-        async login(f) {
-            const e = f.elements;
-            await busy(f.querySelector('[type=submit]'), async () => {
-                try { onLoggedIn(await api('POST', '/api/auth/login', { username: e.username.value, password: e.password.value })); e.password.value = ''; }
-                catch (err) { showAlert('ログインできません', err.message); }
-            });
-        },
-        async register(f) {
-            const e = f.elements;
-            if (e.password.value !== e.confirm.value) return showAlert('エラー', 'パスワードが一致しません。');
-            await busy(f.querySelector('[type=submit]'), async () => {
-                try {
-                    onLoggedIn(await api('POST', '/api/auth/register', { username: e.username.value, password: e.password.value }));
-                    e.password.value = ''; e.confirm.value = '';
-                } catch (err) { showAlert('登録できません', err.message); }
-            });
-        },
         async create(f) {
             const e = f.elements;
             const isPrivate = f.querySelector('input[name=roomType]:checked').value === 'private';
