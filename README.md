@@ -45,7 +45,7 @@ GitHub に置くファイルは次の **5つ** です。
   "private": true,
   "main": "server.js",
   "scripts": { "start": "node server.js" },
-  "engines": { "node": "20.x" }
+  "engines": { "node": "24.x" }
 }
 ```
 
